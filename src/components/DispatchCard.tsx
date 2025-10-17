@@ -208,7 +208,7 @@ const DispatchCard: React.FC<DispatchCardProps> = ({
                 );
 
                 return (
-                  <div className="grid grid-cols-3 gap-3 max-h-[120px] overflow-hidden">
+                  <div className="grid grid-cols-3 gap-3 overflow-hidden">
                     {sortedStatusGroups.slice(0, 6).map(([statusName, group]) => (
                       <div
                         key={statusName}

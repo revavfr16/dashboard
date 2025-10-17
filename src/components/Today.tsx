@@ -185,7 +185,7 @@ const Today: React.FC<TodayProps> = ({ className = "" }) => {
               <div className="text-lg">No one on duty</div>
             </div>
           ) : (
-            <div className="space-y-3 max-h-48 overflow-y-auto">
+            <div className="space-y-3 overflow-y-auto">
               {Object.entries(groupedStaffing).map(
                 ([assignmentName, positions]) => (
                   <div key={assignmentName} className="space-y-2">
