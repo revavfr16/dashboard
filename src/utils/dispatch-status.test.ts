@@ -217,5 +217,42 @@ Another bad line`;
       const m1Result = getUnitStatusFromCallNotes('M1', callNotes, false);
       expect(m1Result?.status).toBe('enroute');
     });
+
+    it('should correctly parse MA40 as arrived on scene, not just dispatched or enroute', () => {
+      const callNotes = `16:28:11: K10, UNIT ON LOCATION
+16:27:04: RADIO TRAFFIC WAS MOVED TO 12C AT 1610
+16:21:48: E02, Message - FIRES OUT E02 WILL BE MOPPING UP
+16:21:15: P10, UNIT ON LOCATION
+16:18:16: E02, Message - SHOW ME W CMD GOT WATER ON THE FIRE AND HOT SPOTS
+16:17:07: K02, UNIT ON LOCATION
+16:13:29: K10, UNIT DISPATCHED & ENROUTE
+16:13:22: B02, UNIT ON LOCATION
+16:13:17: E02, UNIT ON LOCATION - ONE COMBIE FULLY ENGULFED
+16:05:35: K02, UNIT DISPATCHED & ENROUTE
+16:03:55: UNITS EXCHANGED
+16:01:45: B02, UNIT DISPATCHED & ENROUTE
+16:01:15: FS10, UNIT DISPATCHED
+16:00:02: MA40, Message - FULLY ENGULFED MOVING TO A BEAN FIELD SLOWING
+15:58:43: E02, UNIT ENROUTE
+15:58:22: UNITS EXCHANGED
+15:57:11: MA40, UNIT DISPATCHED & ARRIVED ON SCENE
+15:55:13: CALLER WAS ADV I WAS GETTING INFORMATION FOR THE FIRE DEPT. CALLER THEN STATED ITS GOING TO BE GONE BEFORE THEY GET THERE
+15:54:30: CALLER NOT GIVING INFORMATION JUST KEEPS REPEATING THAT IM WASTING TIME
+15:53:04: OUT IN A FIELD
+15:52:06: BRAVO ADVISED
+15:51:32: FS02, Assign
+15:50:28: DIESEL POWERED
+15:49:51: COMBINE ON FIRE`;
+
+      // MA40 should be "on_scene" because of "UNIT DISPATCHED & ARRIVED ON SCENE"
+      const ma40Result = getUnitStatusFromCallNotes('MA40', callNotes, false);
+      expect(ma40Result?.status).toBe('on_scene');
+      expect(ma40Result?.label).toBe('On Scene');
+
+      // E02 should be "on_scene" because of "UNIT ON LOCATION" (most recent status)
+      const e02Result = getUnitStatusFromCallNotes('E02', callNotes, false);
+      expect(e02Result?.status).toBe('on_scene');
+      expect(e02Result?.label).toBe('On Scene');
+    });
   });
 });
