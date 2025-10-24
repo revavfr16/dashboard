@@ -31,12 +31,12 @@ const TestDispatchModal: React.FC<TestDispatchModalProps> = ({ isOpen, onClose }
     let unitCodes: string[]
     if (unitAssignment === 'ours') {
       unitCodes = dispatchType === 'Fire' 
-        ? ['FS16', 'RE16', 'A16', 'CMD16', 'K16']
-        : ['ES16', 'A16', 'M16']
+        ? ['RE16', 'A16', 'CMD16', 'K16']
+        : ['A16', 'M16']
     } else {
       unitCodes = dispatchType === 'Fire'
-        ? ['FS01', 'FS05', 'A05']
-        : ['ES01', 'ES05', 'A05']
+        ? ['E01', 'L01', 'A05']
+        : ['A05', 'M07', 'E03']
     }
 
     // Generate dispatch type and description
@@ -66,8 +66,7 @@ const TestDispatchModal: React.FC<TestDispatchModalProps> = ({ isOpen, onClose }
       alarm_level: "1st Alarm",
       incident_number: incidentNumber,
       fire_zone: unitAssignment === 'ours' ? "Station 16 District" : "Other District",
-      fire_stations: unitAssignment === 'ours' ? ["Station 16"] : ["Station 01", "Station 05"],
-      box_code: unitAssignment === 'ours' ? "1601" : "0101"
+      fire_stations: unitAssignment === 'ours' ? ["Station 16"] : ["Station 01", "Station 05"]
     }
 
     // Create fire incident data

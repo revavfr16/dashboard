@@ -1,11 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Incident } from "../types/incident";
-import {
-  getIncidentPage,
-  isOurUnit,
-  getConfiguredUnits,
-  saveConfiguredUnits,
-} from "../utils/api";
+import { getIncidentPage, isOurUnit, getConfiguredUnits, saveConfiguredUnits } from "../utils/api";
 import DispatchCard from "./DispatchCard";
 import FirehouseDispatchModal from "./FirehouseDispatchModal";
 import TestDispatchModal from "./TestDispatchModal";
@@ -60,31 +55,6 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
     return localStorage.getItem("soundNotifications") !== "false"; // Default to enabled
   });
   const previousIncidentIds = useRef<Set<number>>(new Set());
-
-  // Filter states
-  const [showClosedIncidents, setShowClosedIncidents] = useState(false); // Default: hide closed
-  const [showNonOurUnitIncidents, setShowNonOurUnitIncidents] = useState(true); // Default: show all unit incidents
-  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
-
-  // Track initial load state for efficient polling
-  const isInitialLoad = useRef(true);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      const dropdown = target.closest('.filter-dropdown');
-      if (isFilterDropdownOpen && !dropdown) {
-        setIsFilterDropdownOpen(false);
-      }
-    };
-
-    if (isFilterDropdownOpen) {
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
-    }
-  }, [isFilterDropdownOpen]);
-
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(
     null
   );
@@ -103,11 +73,14 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
     setIsNewDispatch(false);
   }, []);
 
-  const openIncidentModal = useCallback((incident: Incident, isNew: boolean = false) => {
-    setSelectedIncident(incident);
-    setIsNewDispatch(isNew);
-    setIsModalOpen(true);
-  }, []);
+  const openIncidentModal = useCallback(
+    (incident: Incident, isNew = false) => {
+      setSelectedIncident(incident);
+      setIsNewDispatch(isNew);
+      setIsModalOpen(true);
+    },
+    []
+  );
 
   // Background loading function to silently fetch remaining pages
   const loadRemainingPagesInBackground = useCallback(
@@ -190,65 +163,21 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
     try {
       setLoading(true);
       setError(null);
-
-      // Determine the 'since' timestamp
-      let sinceTimestamp: string;
-
-      if (isInitialLoad.current) {
-        // Initial load: Get last 24 hours
-        console.log("Initial fetch - getting last 24 hours...");
-        sinceTimestamp = formatDateForFirstDue(
-          new Date(Date.now() - 24 * 60 * 60 * 1000)
-        );
-      } else {
-        // Subsequent polls: Use the oldest open incident's created_at time
-        // This ensures we re-fetch all open incidents (to get updates)
-        const openIncidents = incidents.filter(
-          (inc) => inc.dispatch.status_code === "open"
-        );
-
-        if (openIncidents.length > 0) {
-          // Find the oldest open incident
-          const oldestOpen = openIncidents.reduce((oldest, current) => {
-            return new Date(current.dispatch.created_at) <
-              new Date(oldest.dispatch.created_at)
-              ? current
-              : oldest;
-          });
-          sinceTimestamp = oldestOpen.dispatch.created_at;
-          console.log(
-            "Poll fetch - checking since oldest open incident:",
-            sinceTimestamp,
-            `(dispatch ${oldestOpen.dispatch.id})`
-          );
-        } else {
-          // No open incidents, just check the last minute for new ones
-          sinceTimestamp = formatDateForFirstDue(
-            new Date(Date.now() - 60 * 1000)
-          );
-          console.log("Poll fetch - no open incidents, checking last minute");
-        }
-      }
-
-      const result = await getIncidentPage(undefined, sinceTimestamp);
+      console.log("Fetching incidents...");
+      // Get incidents from last 24 hours
+      const since24HoursAgo = formatDateForFirstDue(
+        new Date(Date.now() - 24 * 60 * 60 * 1000)
+      );
+      const result = await getIncidentPage(undefined, since24HoursAgo);
       console.log("Received result:", result);
       console.log("Number of incidents:", result.incidents.length);
 
       // Intelligently merge with existing incidents
       setIncidents((prev) => mergeIncidents(prev, result.incidents));
 
-      // Only load remaining pages on initial load
-      if (isInitialLoad.current && result.hasMore && result.nextPageUrl) {
-        console.log("Initial load - fetching remaining pages in background...");
-        loadRemainingPagesInBackground(result.nextPageUrl, sinceTimestamp);
-        isInitialLoad.current = false;
-      } else if (result.hasMore) {
-        // On polls, if there are more results, it could mean many new incidents
-        // or a very old open incident - might need to paginate
-        console.warn(
-          "Poll returned hasMore=true - might need to fetch additional pages"
-        );
-        // Optionally: loadRemainingPagesInBackground(result.nextPageUrl, sinceTimestamp);
+      // If there are more pages, start loading them in the background
+      if (result.hasMore && result.nextPageUrl) {
+        loadRemainingPagesInBackground(result.nextPageUrl, since24HoursAgo);
       }
     } catch (err) {
       const errorMessage =
@@ -322,7 +251,7 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
 
   useEffect(() => {
     fetchFirstPage();
-    // Poll for updates every 10 seconds
+    // Refresh first page every 30 seconds
     const interval = setInterval(fetchFirstPage, 10000);
     return () => clearInterval(interval);
   }, []);
@@ -374,27 +303,7 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
     );
   }
 
-  // Apply filters to incidents
-  const filteredIncidents = incidents.filter(({ dispatch }) => {
-    // Filter by status
-    if (dispatch.status_code === "closed" && !showClosedIncidents) {
-      return false;
-    }
-    
-    // Filter by our units
-    if (!showNonOurUnitIncidents && !isOurUnit(dispatch.unit_codes)) {
-      return false;
-    }
-
-    // Filter out notification incidents
-    if (dispatch.type === "NOTIFICATION") {
-      return false;
-    }
-
-    return true;
-  });
-
-  const openIncidents = filteredIncidents
+  const openIncidents = incidents
     .filter(({ dispatch }) => dispatch.status_code === "open")
     .sort((a, b) => {
       // Sort our units first, then by creation time (newest first)
@@ -411,7 +320,7 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
       );
     });
 
-  const closedIncidents = filteredIncidents.filter(
+  const closedIncidents = incidents.filter(
     ({ dispatch }) => dispatch.status_code === "closed"
   );
 
@@ -438,68 +347,14 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
               )}
             </>
           )}
-          
-          {/* Filters Dropdown */}
-          <div className="relative filter-dropdown">
-            <button
-              onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-              className="text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center gap-1"
-            >
-              Filter dispatches
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            
-            {isFilterDropdownOpen && (
-              <div className="absolute right-0 mt-1 w-48 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg z-10">
-                <div className="py-1">
-                  <label className="flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={!showNonOurUnitIncidents}
-                      onChange={(e) => setShowNonOurUnitIncidents(!e.target.checked)}
-                      className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    Our Units
-                  </label>
-                  <label className="flex items-center px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={!showClosedIncidents}
-                      onChange={(e) => setShowClosedIncidents(!e.target.checked)}
-                      className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    Open
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
-          
           <button
             onClick={() => setIsConfigModalOpen(true)}
             className="p-1 rounded text-gray-600 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             title="Configure units"
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
           <button
@@ -573,18 +428,11 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
         </div>
       </div>
 
-
-      {filteredIncidents.length === 0 ? (
+      {incidents.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
           <div className="text-center">
-            <div className="text-2xl mb-2">
-              {incidents.length === 0 ? "✅" : "🔍"}
-            </div>
-            <div>
-              {incidents.length === 0 
-                ? "No active dispatches" 
-                : "No incidents match current filters"}
-            </div>
+            <div className="text-2xl mb-2">✅</div>
+            <div>No active dispatches</div>
           </div>
         </div>
       ) : (
@@ -596,12 +444,12 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
                 <DispatchCard
                   key={incident.dispatch.id}
                   incident={incident}
-                  onClick={() => openIncidentModal(incident, false)}
+                  onClick={() => openIncidentModal(incident)}
                 />
               ))}
             </div>
 
-            {/* Divider */}
+            {/* Divider
             {closedIncidents.length > 0 && (
               <div className="flex items-center my-6">
                 <div className="flex-1 border-t border-gray-300 dark:border-gray-600"></div>
@@ -612,16 +460,16 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
               </div>
             )}
 
-            {/* Closed Incidents */}
+            Closed Incidents
             <div className="space-y-4">
               {closedIncidents.map((incident) => (
                 <DispatchCard
                   key={incident.dispatch.id}
                   incident={incident}
-                  onClick={() => openIncidentModal(incident, false)}
+                  onClick={() => openIncidentModal(incident)}
                 />
               ))}
-            </div>
+            </div> */}
           </div>
         </div>
       )}

@@ -229,11 +229,6 @@ export function getUnitStatusFromCallNotes(unitCode: string, callNotes: string |
       const statusText = match[2].trim();
       const upperStatusText = statusText.toUpperCase();
 
-      // Skip "Message" entries - they are informational, not status updates
-      if (upperStatusText.startsWith('MESSAGE')) {
-        continue;
-      }
-
       // Priority 1: Check for COMPLETE/AVAILABLE first (highest priority)
       if (upperStatusText.includes('COMPLETE') || upperStatusText.includes('AVAILABLE')) {
         return {
@@ -317,7 +312,7 @@ export function getUnitStatusFromCallNotes(unitCode: string, callNotes: string |
         };
       }
 
-      // Priority 7: Check for UNIT DISPATCHED & ARRIVED ON SCENE (must come before ENROUTE and DISPATCHED checks)
+      // Priority 7: Check for UNIT DISPATCHED & ARRIVED ON SCENE
       if (upperStatusText.includes('UNIT DISPATCHED & ARRIVED ON SCENE')) {
         return {
           status: 'on_scene',
@@ -329,19 +324,7 @@ export function getUnitStatusFromCallNotes(unitCode: string, callNotes: string |
         };
       }
 
-      // Priority 8: Check for UNIT DISPATCHED & ENROUTE (must come before ENROUTE and DISPATCHED checks)
-      if (upperStatusText.includes('UNIT DISPATCHED & ENROUTE')) {
-        return {
-          status: 'enroute',
-          label: 'Enroute',
-          className: 'bg-green-500 text-white',
-          borderClass: isOurUnit
-            ? useRing ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-200 dark:ring-blue-800' : 'border-blue-500 dark:border-blue-400'
-            : 'border-green-500'
-        };
-      }
-
-      // Priority 9: Check for ENROUTE
+      // Priority 8: Check for ENROUTE
       if (upperStatusText.includes('ENROUTE')) {
         return {
           status: 'enroute',
@@ -353,7 +336,7 @@ export function getUnitStatusFromCallNotes(unitCode: string, callNotes: string |
         };
       }
 
-      // Priority 10: Check for UNIT DISPATCHED or DISPATCHED
+      // Priority 9: Check for UNIT DISPATCHED or DISPATCHED
       if (upperStatusText.includes('UNIT DISPATCHED') || upperStatusText.includes('DISPATCHED')) {
         return {
           status: 'dispatched',
