@@ -5,6 +5,7 @@ import {
   isOurUnit,
   getConfiguredUnits,
   saveConfiguredUnits,
+  fetchUnitsByDispatch,
 } from "../utils/api";
 import DispatchCard from "./DispatchCard";
 import FirehouseDispatchModal from "./FirehouseDispatchModal";
@@ -201,32 +202,21 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
           new Date(Date.now() - 24 * 60 * 60 * 1000)
         );
       } else {
-        // Subsequent polls: Use the oldest open incident's created_at time
-        // This ensures we re-fetch all open incidents (to get updates)
-        const openIncidents = incidents.filter(
-          (inc) => inc.dispatch.status_code === "open"
-        );
-
-        if (openIncidents.length > 0) {
-          // Find the oldest open incident
-          const oldestOpen = openIncidents.reduce((oldest, current) => {
-            return new Date(current.dispatch.created_at) <
-              new Date(oldest.dispatch.created_at)
-              ? current
-              : oldest;
-          });
-          sinceTimestamp = oldestOpen.dispatch.created_at;
+        // Subsequent polls: Check for new incidents since the most recent one
+        // API returns incidents sorted newest first, so just grab the first one
+        if (incidents.length > 0) {
+          sinceTimestamp = incidents[0].dispatch.created_at;
           console.log(
-            "Poll fetch - checking since oldest open incident:",
+            "Poll fetch - checking for new incidents since:",
             sinceTimestamp,
-            `(dispatch ${oldestOpen.dispatch.id})`
+            `(dispatch ${incidents[0].dispatch.id})`
           );
         } else {
-          // No open incidents, just check the last minute for new ones
+          // No incidents yet, check last minute
           sinceTimestamp = formatDateForFirstDue(
             new Date(Date.now() - 60 * 1000)
           );
-          console.log("Poll fetch - no open incidents, checking last minute");
+          console.log("Poll fetch - no incidents, checking last minute");
         }
       }
 
@@ -242,13 +232,6 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
         console.log("Initial load - fetching remaining pages in background...");
         loadRemainingPagesInBackground(result.nextPageUrl, sinceTimestamp);
         isInitialLoad.current = false;
-      } else if (result.hasMore) {
-        // On polls, if there are more results, it could mean many new incidents
-        // or a very old open incident - might need to paginate
-        console.warn(
-          "Poll returned hasMore=true - might need to fetch additional pages"
-        );
-        // Optionally: loadRemainingPagesInBackground(result.nextPageUrl, sinceTimestamp);
       }
     } catch (err) {
       const errorMessage =
@@ -322,10 +305,58 @@ const ActiveDispatches: React.FC<ActiveDispatchesProps> = ({
 
   useEffect(() => {
     fetchFirstPage();
-    // Poll for updates every 10 seconds
+    // Poll for new incidents every 10 seconds
     const interval = setInterval(fetchFirstPage, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  // Poll for unit updates on all open dispatches every 10 seconds
+  useEffect(() => {
+    const updateOpenDispatchUnits = async () => {
+      const openDispatches = incidents.filter(
+        (inc) => inc.dispatch.status_code === "open"
+      );
+
+      if (openDispatches.length === 0) return;
+
+      console.log(`Updating units for ${openDispatches.length} open dispatches...`);
+
+      // Fetch unit updates for all open dispatches in parallel
+      const updates = await Promise.allSettled(
+        openDispatches.map(async (incident) => {
+          const unitDispatch = await fetchUnitsByDispatch(incident.dispatch.id);
+          return { dispatchId: incident.dispatch.id, unitDispatch };
+        })
+      );
+
+      // Update incidents with fresh unit data
+      setIncidents((prev) =>
+        prev.map((incident) => {
+          const update = updates.find(
+            (u) =>
+              u.status === "fulfilled" &&
+              u.value.dispatchId === incident.dispatch.id
+          );
+
+          if (update && update.status === "fulfilled" && update.value.unitDispatch) {
+            return {
+              ...incident,
+              unitDispatch: update.value.unitDispatch,
+            };
+          }
+
+          return incident;
+        })
+      );
+    };
+
+    // Initial update
+    updateOpenDispatchUnits();
+
+    // Poll every 10 seconds
+    const interval = setInterval(updateOpenDispatchUnits, 10000);
+    return () => clearInterval(interval);
+  }, [incidents]);
 
   if (loading && incidents.length === 0) {
     return (
