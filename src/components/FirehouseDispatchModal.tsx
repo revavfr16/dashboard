@@ -6,7 +6,7 @@ interface FirehouseDispatchModalProps {
   incident: Incident | null;
   isOpen: boolean;
   onClose: () => void;
-  isNewDispatch: boolean;
+  isNewDispatch?: boolean;
 }
 
 const FirehouseDispatchModal: React.FC<FirehouseDispatchModalProps> = ({
@@ -43,7 +43,7 @@ const FirehouseDispatchModal: React.FC<FirehouseDispatchModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="relative max-w-[95vw] w-full max-h-[95vh] overflow-y-auto"
+        className="relative max-w-7xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
@@ -75,11 +75,7 @@ const FirehouseDispatchModal: React.FC<FirehouseDispatchModalProps> = ({
         )}
 
         {/* Firehouse dispatch card */}
-        <FirehouseDispatchCard
-          incident={incident}
-          isNewDispatch={isNewDispatch}
-          onAutoClose={onClose}
-        />
+        <FirehouseDispatchCard incident={incident} />
       </div>
     </div>
   );
