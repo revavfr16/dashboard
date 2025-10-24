@@ -83,7 +83,7 @@ const FirehouseDispatchCard: React.FC<FirehouseDispatchCardProps> = ({
 
       // Auto-close countdown logic (only for open incidents and new dispatches)
       if (dispatch.status_code === "open" && isNewDispatch) {
-        const tenMinutesLater = dispatchTime + (1 * 60 * 1000); // 1 minute in milliseconds
+        const tenMinutesLater = dispatchTime + (10 * 60 * 1000); // 1 minute in milliseconds
         const timeLeft = tenMinutesLater - now;
 
         if (timeLeft <= 0) {
